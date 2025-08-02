@@ -7,6 +7,7 @@ round_trip "37-small-asm-ex"
 round_trip "38-larger-asm-ex"
 round_trip "39"
 round_trip "40"
+round_trip "41"
 
 def round_trip [case] {
     print $"Test: ($case)"

@@ -8,11 +8,15 @@ pub(crate) enum Data {
 }
 
 impl Data {
-    pub(crate) fn parse(bytes: &mut ByteStream, is_wide: bool) -> anyhow::Result<Self> {
-        Ok(if is_wide {
-            Data::to_word(bytes.next()?, bytes.next()?)
-        } else {
-            Data::Byte(bytes.next()?)
+    pub(crate) fn parse(
+        bytes: &mut ByteStream,
+        is_wide: bool,
+        sign_bit: bool,
+    ) -> anyhow::Result<Self> {
+        Ok(match (is_wide, sign_bit) {
+            (true, false) => Data::to_word(bytes.next()?, bytes.next()?),
+            (true, true) => Data::Word(bytes.next()? as i8 as u16),
+            (false, _) => Data::Byte(bytes.next()?),
         })
     }
     pub(crate) fn to_word(b1: u8, b2: u8) -> Self {

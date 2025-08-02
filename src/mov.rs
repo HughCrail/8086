@@ -1,34 +1,9 @@
+use derive_more::Display;
+use std::fmt::Display;
+
 use crate::{
-    ByteStream, Register, Target,
-    data::{Data, DataArg},
-    target::MemoryAddress,
+    ByteStream, Register, Target, base::RegMemEitherWay, data::Data, target::MemoryAddress,
 };
-
-#[derive(Debug)]
-pub(crate) struct Mov {
-    pub(crate) destination: Target,
-    pub(crate) source: Target,
-}
-
-impl Mov {
-    pub(crate) fn parse(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Self> {
-        let byte_2 = bytes.next()?;
-        let is_wide = (byte_1 & 0b1) == 1;
-        let reg = Target::Register(Register::from((byte_2 >> 3) & 0b111, is_wide)?);
-        let target = Target::parse(bytes, byte_2, is_wide)?;
-
-        let (destination, source) = if (byte_1 & 0b10) != 0 {
-            (reg, target)
-        } else {
-            (target, reg)
-        };
-
-        Ok(Mov {
-            destination,
-            source,
-        })
-    }
-}
 
 #[derive(Debug)]
 pub(crate) struct MovImmToReg {
@@ -41,42 +16,26 @@ impl MovImmToReg {
         let is_wide = (byte_1 & 0b1000) != 0;
         Ok(MovImmToReg {
             destination: Register::from(byte_1 & 0b111, is_wide)?,
-            data: Data::parse(bytes, is_wide)?,
+            data: Data::parse(bytes, is_wide, false)?,
         })
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct MovImmToRegMem {
-    pub(crate) destination: Target,
-    pub(crate) data: DataArg,
-}
-
-impl MovImmToRegMem {
-    pub(crate) fn parse(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Self> {
-        let is_wide = byte_1 & 0b1 == 1;
-        let byte_2 = bytes.next()?;
-        let destination = Target::parse(bytes, byte_2, is_wide)?;
-        let explicit = matches!(&destination, Target::Memory(_));
-        Ok(Self {
-            destination,
-            data: DataArg {
-                explicit,
-                data: Data::parse(bytes, is_wide)?,
-            },
-        })
+impl Display for MovImmToReg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, {}", self.destination, self.data)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub(crate) struct MovAccToMem {
-    pub(crate) mov: Mov,
+    pub(crate) base: RegMemEitherWay,
 }
 
 impl MovAccToMem {
     pub(crate) fn parse(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Self> {
         Ok(Self {
-            mov: Mov {
+            base: RegMemEitherWay {
                 destination: parse_mem(byte_1, bytes)?,
                 source: Target::Register(Register::AX),
             },
@@ -84,15 +43,15 @@ impl MovAccToMem {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub(crate) struct MovMemToAcc {
-    pub(crate) mov: Mov,
+    pub(crate) base: RegMemEitherWay,
 }
 
 impl MovMemToAcc {
     pub(crate) fn parse(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Self> {
         Ok(Self {
-            mov: Mov {
+            base: RegMemEitherWay {
                 destination: Target::Register(Register::AX),
                 source: parse_mem(byte_1, bytes)?,
             },
@@ -104,5 +63,6 @@ pub(crate) fn parse_mem(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Ta
     Ok(Target::Memory(MemoryAddress::Direct(Data::parse(
         bytes,
         (byte_1 & 0b1) == 1,
+        false,
     )?)))
 }

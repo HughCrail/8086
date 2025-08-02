@@ -10,6 +10,7 @@ use std::{
 };
 use target::Target;
 
+mod base;
 mod bytestream;
 mod data;
 mod instruction;
