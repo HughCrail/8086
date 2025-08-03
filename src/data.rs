@@ -74,7 +74,11 @@ impl Display for Displacement {
         match self {
             Displacement::Byte(x) => {
                 let val = *x as i8;
-                write!(f, "{} {}", if val >= 0 { '+' } else { '-' }, val.abs())
+                if val >= 0 {
+                    write!(f, "+ {}", val)
+                } else {
+                    write!(f, "- {}", val.abs())
+                }
             }
             Displacement::Word(x) => write!(f, "+ {x}"),
         }

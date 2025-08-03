@@ -10,6 +10,9 @@ use std::{
 };
 use target::Target;
 
+#[macro_use]
+mod macros;
+
 mod base;
 mod bytestream;
 mod data;

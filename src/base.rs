@@ -90,3 +90,26 @@ impl Display for ImmToAcc {
         write!(f, "{}, {}", self.destination, self.data)
     }
 }
+
+#[derive(Debug)]
+pub(crate) struct IPInc8 {
+    offset: i8,
+}
+
+impl IPInc8 {
+    pub(crate) fn parse(byte: u8) -> anyhow::Result<Self> {
+        Ok(Self {
+            offset: (byte as i8) + 2,
+        })
+    }
+}
+
+impl Display for IPInc8 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.offset >= 0 {
+            write!(f, "$+{}", self.offset)
+        } else {
+            write!(f, "$-{}", self.offset.abs())
+        }
+    }
+}
