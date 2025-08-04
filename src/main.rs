@@ -13,11 +13,10 @@ use target::Target;
 #[macro_use]
 mod macros;
 
-mod base;
 mod bytestream;
 mod data;
 mod instruction;
-mod mov;
+mod parsers;
 mod register;
 mod target;
 
@@ -26,29 +25,39 @@ struct Cli {
     #[arg(value_name = "BINFILE")]
     infile: PathBuf,
     #[arg(short, long, value_name = "ASMFILE")]
-    outfile: PathBuf,
+    outfile: Option<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let mut out_file = BufWriter::new(File::create(&cli.outfile)?);
-    writeln!(
-        out_file,
-        ";{}",
-        cli.outfile
-            .file_name()
-            .ok_or(anyhow!("invalid out file"))?
-            .display()
-    )?;
-    writeln!(out_file)?;
-    writeln!(out_file, "bits 16")?;
-    writeln!(out_file)?;
 
     let mut byte_stream = ByteStream {
         bytes: BufReader::new(File::open(cli.infile)?).bytes(),
     };
+
+    if let Some(out_file_path) = cli.outfile {
+        let mut out_file = BufWriter::new(File::create(&out_file_path)?);
+        writeln!(
+            out_file,
+            ";{}",
+            out_file_path
+                .file_name()
+                .ok_or(anyhow!("invalid out file"))?
+                .display()
+        )?;
+        writeln!(out_file)?;
+        writeln!(out_file, "bits 16")?;
+        writeln!(out_file)?;
+
+        while let Some(instruction) = Inst::parse(&mut byte_stream)? {
+            writeln!(out_file, "{instruction}")?;
+        }
+
+        return Ok(());
+    }
+
     while let Some(instruction) = Inst::parse(&mut byte_stream)? {
-        writeln!(out_file, "{instruction}")?;
+        println!("{instruction}");
     }
 
     Ok(())

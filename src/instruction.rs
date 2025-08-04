@@ -1,7 +1,8 @@
 use crate::{
-    ByteStream,
-    base::{IPInc8, ImmToAcc, ImmToRegMem, RegMemEitherWay},
-    mov::{MovAccToMem, MovImmToReg, MovMemToAcc},
+    bytestream::ByteStream,
+    data::{Data, DataArg, RelativeJump},
+    parsers,
+    target::Target,
 };
 use anyhow::anyhow;
 use derive_more::Display;
@@ -37,7 +38,13 @@ enum Mnemonic {
 
 impl Display for Mnemonic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Mnemonic {
+    fn as_str(&self) -> &str {
+        match self {
             Mnemonic::Add => "add",
             Mnemonic::Mov => "mov",
             Mnemonic::Sub => "sub",
@@ -62,44 +69,47 @@ impl Display for Mnemonic {
             Mnemonic::Loopz => "loopz",
             Mnemonic::Loopnz => "loopnz",
             Mnemonic::Jcxz => "jcxz",
-        })
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct Inst {
-    mnemonic: Mnemonic,
-    encoding: Encoding,
-}
-
-impl Display for Inst {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.mnemonic, self.encoding)
+        }
     }
 }
 
 enum_with_matching_struct! {
     #[derive(Debug, Display)]
-    pub(crate) enum Encoding {
-        RegMemEitherWay,
-        ImmToRegMem,
-        ImmToAcc,
-        MovImmToReg,
-        MovAccToMem,
-        MovMemToAcc,
-        IPInc8
+    pub enum Operand {
+        Target,
+        DataArg,
+        Data,
+        RelativeJump,
     }
 }
 
-macro_rules! parse {
-    ($variant:ident, $($args:expr),*) => {
-        $variant::parse($($args),*).map(Encoding::$variant)
-    };
+pub(crate) type Operands = (Option<Operand>, Option<Operand>);
+
+#[derive(Debug)]
+pub(crate) struct Inst {
+    mnemonic: Mnemonic,
+    operands: Operands,
+}
+
+impl Display for Inst {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.mnemonic.as_str())?;
+        if let Some(op) = &self.operands.0 {
+            write!(f, " {op}")?;
+        }
+        if let Some(op) = &self.operands.1 {
+            write!(f, ", {op}")?;
+        }
+        Ok(())
+    }
 }
 
 impl Inst {
-    fn new(mnemonic: Mnemonic, encoding: Encoding) -> Self {
-        Self { mnemonic, encoding }
+    fn new(mnemonic: Mnemonic, op1: Option<Operand>, op2: Option<Operand>) -> Self {
+        Self {
+            mnemonic,
+            operands: (op1, op2),
+        }
     }
 
     pub(crate) fn parse(bytes: &mut ByteStream) -> anyhow::Result<Option<Self>> {
@@ -108,53 +118,56 @@ impl Inst {
         };
 
         use Mnemonic::*;
+        use parsers::*;
 
-        let (mnemonic, encoding) = match byte_1 {
-            b if b >> 2 == 0b000000 => (Add, parse!(RegMemEitherWay, b, bytes)?),
-            b if b >> 1 == 0b0000010 => (Add, parse!(ImmToAcc, b, bytes)?),
-            b if b >> 2 == 0b100010 => (Mov, parse!(RegMemEitherWay, b, bytes)?),
-            b if b >> 4 == 0b1011 => (Mov, parse!(MovImmToReg, b, bytes)?),
-            b if b >> 1 == 0b1100011 => (Mov, parse!(ImmToRegMem, b, bytes.next()?, bytes, false)?),
-            b if b >> 1 == 0b1010000 => (Mov, parse!(MovMemToAcc, b, bytes)?),
-            b if b >> 1 == 0b1010001 => (Mov, parse!(MovAccToMem, b, bytes)?),
-            b if b >> 2 == 0b001010 => (Sub, parse!(RegMemEitherWay, b, bytes)?),
-            b if b >> 1 == 0b0010110 => (Sub, parse!(ImmToAcc, b, bytes)?),
-            b if b >> 2 == 0b001110 => (Cmp, parse!(RegMemEitherWay, b, bytes)?),
-            b if b >> 1 == 0b0011110 => (Cmp, parse!(ImmToAcc, b, bytes)?),
+        let (mnemonic, (op1, op2)) = match byte_1 {
+            b if b >> 2 == 0b000000 => (Add, parse_reg_mem_either_way(b, bytes)?),
+            b if b >> 1 == 0b0000010 => (Add, parse_imm_to_acc(b, bytes)?),
+            b if b >> 2 == 0b100010 => (Mov, parse_reg_mem_either_way(b, bytes)?),
+            b if b >> 4 == 0b1011 => (Mov, parse_mov_imm_to_reg(b, bytes)?),
+            b if b >> 1 == 0b1100011 => {
+                (Mov, parse_imm_to_reg_mem(b, bytes.next()?, bytes, false)?)
+            }
+            b if b >> 1 == 0b1010000 => (Mov, parse_mov_mem_to_acc(b, bytes)?),
+            b if b >> 1 == 0b1010001 => (Mov, parse_mov_acc_to_mem(b, bytes)?),
+            b if b >> 2 == 0b001010 => (Sub, parse_reg_mem_either_way(b, bytes)?),
+            b if b >> 1 == 0b0010110 => (Sub, parse_imm_to_acc(b, bytes)?),
+            b if b >> 2 == 0b001110 => (Cmp, parse_reg_mem_either_way(b, bytes)?),
+            b if b >> 1 == 0b0011110 => (Cmp, parse_imm_to_acc(b, bytes)?),
             b if b >> 2 == 0b100000 => {
                 let byte_2 = bytes.next()?;
                 let op = byte_2 >> 3 & 0b111;
                 match op {
-                    0b000 => (Add, parse!(ImmToRegMem, b, byte_2, bytes, true)?),
-                    0b101 => (Sub, parse!(ImmToRegMem, b, byte_2, bytes, true)?),
-                    0b111 => (Cmp, parse!(ImmToRegMem, b, byte_2, bytes, true)?),
+                    0b000 => (Add, parse_imm_to_reg_mem(b, byte_2, bytes, true)?),
+                    0b101 => (Sub, parse_imm_to_reg_mem(b, byte_2, bytes, true)?),
+                    0b111 => (Cmp, parse_imm_to_reg_mem(b, byte_2, bytes, true)?),
                     _ => return Err(anyhow!("usupported op: {op:03b}")),
                 }
             }
-            0b01110100 => (Je, parse!(IPInc8, bytes.next()?)?),
-            0b01111100 => (Jl, parse!(IPInc8, bytes.next()?)?),
-            0b01110101 => (Jnz, parse!(IPInc8, bytes.next()?)?),
-            0b01111110 => (Jle, parse!(IPInc8, bytes.next()?)?),
-            0b01110010 => (Jb, parse!(IPInc8, bytes.next()?)?),
-            0b01110110 => (Jbe, parse!(IPInc8, bytes.next()?)?),
-            0b01111010 => (Jp, parse!(IPInc8, bytes.next()?)?),
-            0b01110000 => (Jo, parse!(IPInc8, bytes.next()?)?),
-            0b01111000 => (Js, parse!(IPInc8, bytes.next()?)?),
-            0b01111101 => (Jnl, parse!(IPInc8, bytes.next()?)?),
-            0b01111111 => (Jg, parse!(IPInc8, bytes.next()?)?),
-            0b01110011 => (Jnb, parse!(IPInc8, bytes.next()?)?),
-            0b01110111 => (Ja, parse!(IPInc8, bytes.next()?)?),
-            0b01111011 => (Jnp, parse!(IPInc8, bytes.next()?)?),
-            0b01110001 => (Jno, parse!(IPInc8, bytes.next()?)?),
-            0b01111001 => (Jns, parse!(IPInc8, bytes.next()?)?),
-            0b11100010 => (Loop, parse!(IPInc8, bytes.next()?)?),
-            0b11100001 => (Loopz, parse!(IPInc8, bytes.next()?)?),
-            0b11100000 => (Loopnz, parse!(IPInc8, bytes.next()?)?),
-            0b11100011 => (Jcxz, parse!(IPInc8, bytes.next()?)?),
+            0b01110100 => (Je, parse_ip_inc_8(bytes.next()?)),
+            0b01111100 => (Jl, parse_ip_inc_8(bytes.next()?)),
+            0b01110101 => (Jnz, parse_ip_inc_8(bytes.next()?)),
+            0b01111110 => (Jle, parse_ip_inc_8(bytes.next()?)),
+            0b01110010 => (Jb, parse_ip_inc_8(bytes.next()?)),
+            0b01110110 => (Jbe, parse_ip_inc_8(bytes.next()?)),
+            0b01111010 => (Jp, parse_ip_inc_8(bytes.next()?)),
+            0b01110000 => (Jo, parse_ip_inc_8(bytes.next()?)),
+            0b01111000 => (Js, parse_ip_inc_8(bytes.next()?)),
+            0b01111101 => (Jnl, parse_ip_inc_8(bytes.next()?)),
+            0b01111111 => (Jg, parse_ip_inc_8(bytes.next()?)),
+            0b01110011 => (Jnb, parse_ip_inc_8(bytes.next()?)),
+            0b01110111 => (Ja, parse_ip_inc_8(bytes.next()?)),
+            0b01111011 => (Jnp, parse_ip_inc_8(bytes.next()?)),
+            0b01110001 => (Jno, parse_ip_inc_8(bytes.next()?)),
+            0b01111001 => (Jns, parse_ip_inc_8(bytes.next()?)),
+            0b11100010 => (Loop, parse_ip_inc_8(bytes.next()?)),
+            0b11100001 => (Loopz, parse_ip_inc_8(bytes.next()?)),
+            0b11100000 => (Loopnz, parse_ip_inc_8(bytes.next()?)),
+            0b11100011 => (Jcxz, parse_ip_inc_8(bytes.next()?)),
             _ => {
                 return Err(anyhow!("unsupported opcode in byte: {byte_1:08b}"));
             }
         };
-        Ok(Some(Self::new(mnemonic, encoding)))
+        Ok(Some(Self::new(mnemonic, op1, op2)))
     }
 }

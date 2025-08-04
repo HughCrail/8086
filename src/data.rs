@@ -75,7 +75,7 @@ impl Display for Displacement {
             Displacement::Byte(x) => {
                 let val = *x as i8;
                 if val >= 0 {
-                    write!(f, "+ {}", val)
+                    write!(f, "+ {val}")
                 } else {
                     write!(f, "- {}", val.abs())
                 }
@@ -87,4 +87,19 @@ impl Display for Displacement {
 
 pub(crate) fn create_word(b1: u8, b2: u8) -> u16 {
     ((b2 as u16) << 8) + b1 as u16
+}
+
+#[derive(Debug)]
+pub(crate) struct RelativeJump {
+    pub(crate) offset: i8,
+}
+
+impl Display for RelativeJump {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.offset >= 0 {
+            write!(f, "$+{}", self.offset)
+        } else {
+            write!(f, "$-{}", -self.offset)
+        }
+    }
 }
