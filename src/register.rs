@@ -1,6 +1,13 @@
 use anyhow::anyhow;
 use std::fmt::Display;
 
+#[derive(Debug)]
+pub(crate) enum RegType {
+    Low,
+    High,
+    Wide,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Register {
     // byte
@@ -70,17 +77,13 @@ impl Register {
         })
     }
 
-    pub(crate) fn is_wide(&self) -> bool {
+    pub(crate) fn get_type(&self) -> RegType {
+        use RegType::*;
+        use Register::*;
         match self {
-            Register::AX
-            | Register::CX
-            | Register::DX
-            | Register::BX
-            | Register::SP
-            | Register::BP
-            | Register::SI
-            | Register::DI => true,
-            _ => false,
+            AL | CL | DL | BL => Low,
+            AH | CH | DH | BH => High,
+            _ => Wide,
         }
     }
 }

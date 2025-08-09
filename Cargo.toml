@@ -7,3 +7,4 @@ edition = "2024"
 anyhow = "1.0.98"
 clap = { version = "4.5.41", features = ["derive"] }
 derive_more = { version = "2.0.1", features = ["display"] }
+enum-iterator = "2.1.0"

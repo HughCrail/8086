@@ -7,6 +7,15 @@ pub(crate) enum Data {
     Word(u16),
 }
 
+impl From<&Data> for u16 {
+    fn from(val: &Data) -> Self {
+        match val {
+            Data::Byte(b) => (*b).into(),
+            Data::Word(w) => *w,
+        }
+    }
+}
+
 impl Data {
     pub(crate) fn parse(
         bytes: &mut ByteStream,
@@ -37,6 +46,12 @@ impl Display for Data {
 pub(crate) struct DataArg {
     pub(crate) explicit: bool,
     pub(crate) data: Data,
+}
+
+impl From<&DataArg> for u16 {
+    fn from(value: &DataArg) -> Self {
+        (&value.data).into()
+    }
 }
 
 impl Display for DataArg {

@@ -1,8 +1,9 @@
 use crate::{
+    Register,
     bytestream::ByteStream,
     data::{Data, DataArg, RelativeJump},
     parsers,
-    target::Target,
+    target::{MemoryAddress, SegmentRegister, Target},
 };
 use anyhow::anyhow;
 use derive_more::Display;
@@ -76,10 +77,57 @@ impl Mnemonic {
 enum_with_matching_struct! {
     #[derive(Debug, Display)]
     pub enum Operand {
-        Target,
+        Register,
+        MemoryAddress,
         DataArg,
         Data,
         RelativeJump,
+        SegmentRegister
+    }
+}
+
+impl From<Target> for Operand {
+    fn from(t: Target) -> Self {
+        match t {
+            Target::Register(register) => Self::Register(register),
+            Target::Memory(memory_address) => Self::MemoryAddress(memory_address),
+        }
+    }
+}
+
+impl From<Register> for Operand {
+    fn from(r: Register) -> Self {
+        Self::Register(r)
+    }
+}
+
+impl From<MemoryAddress> for Operand {
+    fn from(m: MemoryAddress) -> Self {
+        Self::MemoryAddress(m)
+    }
+}
+
+impl From<Data> for Operand {
+    fn from(d: Data) -> Self {
+        Self::Data(d)
+    }
+}
+
+impl From<DataArg> for Operand {
+    fn from(d: DataArg) -> Self {
+        Self::DataArg(d)
+    }
+}
+
+impl From<SegmentRegister> for Operand {
+    fn from(s: SegmentRegister) -> Self {
+        Self::SegmentRegister(s)
+    }
+}
+
+impl From<RelativeJump> for Operand {
+    fn from(r: RelativeJump) -> Self {
+        Self::RelativeJump(r)
     }
 }
 
@@ -130,6 +178,8 @@ impl Inst {
             }
             b if b >> 1 == 0b1010000 => (Mov, parse_mov_mem_to_acc(b, bytes)?),
             b if b >> 1 == 0b1010001 => (Mov, parse_mov_acc_to_mem(b, bytes)?),
+            0b10001110 => (Mov, parse_rm_to_sm(bytes)?),
+            0b10001100 => (Mov, parse_sm_to_rm(bytes)?),
             b if b >> 2 == 0b001010 => (Sub, parse_reg_mem_either_way(b, bytes)?),
             b if b >> 1 == 0b0010110 => (Sub, parse_imm_to_acc(b, bytes)?),
             b if b >> 2 == 0b001110 => (Cmp, parse_reg_mem_either_way(b, bytes)?),

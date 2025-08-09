@@ -1,14 +1,20 @@
-use crate::{Inst, Mnemonic, data::Data, instruction::Operand, register::Register, target::Target};
+use crate::{
+    Inst, Mnemonic,
+    instruction::Operand,
+    register::{RegType, Register},
+    target::SegmentRegister,
+};
 use anyhow::anyhow;
+use enum_iterator::{Sequence, all};
 use std::fmt::Display;
 
 #[derive(Debug)]
 pub(crate) struct Computer {
-    pub(crate) registers: [u16; 8],
+    pub(crate) registers: [u16; 12],
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Sequence)]
 pub(crate) enum Reg {
     AX,
     BX,
@@ -18,10 +24,14 @@ pub(crate) enum Reg {
     BP,
     SI,
     DI,
+    ES,
+    CS,
+    SS,
+    DS,
 }
 
-impl Reg {
-    pub(crate) fn from(r: Register) -> Self {
+impl From<Register> for Reg {
+    fn from(r: Register) -> Self {
         match r {
             Register::AL => Self::AX,
             Register::BL => Self::BX,
@@ -41,16 +51,35 @@ impl Reg {
             Register::DI => Self::DI,
         }
     }
+}
+
+impl From<SegmentRegister> for Reg {
+    fn from(r: SegmentRegister) -> Self {
+        match r {
+            SegmentRegister::ES => Self::ES,
+            SegmentRegister::CS => Self::CS,
+            SegmentRegister::SS => Self::SS,
+            SegmentRegister::DS => Self::DS,
+        }
+    }
+}
+
+impl Reg {
     pub(crate) fn as_str(self) -> &'static str {
+        use Reg::*;
         match self {
-            Reg::AX => "ax",
-            Reg::BX => "bx",
-            Reg::CX => "cx",
-            Reg::DX => "dx",
-            Reg::SP => "sp",
-            Reg::BP => "bp",
-            Reg::SI => "si",
-            Reg::DI => "di",
+            AX => "ax",
+            BX => "bx",
+            CX => "cx",
+            DX => "dx",
+            SP => "sp",
+            BP => "bp",
+            SI => "si",
+            DI => "di",
+            ES => "es",
+            CS => "cs",
+            SS => "ss",
+            DS => "ds",
         }
     }
 }
@@ -76,87 +105,63 @@ impl Display for Update {
 
 impl Computer {
     pub(crate) fn new() -> Self {
-        Self { registers: [0; 8] }
+        Self { registers: [0; 12] }
     }
 
     pub(crate) fn execute_instruction(&mut self, i: &Inst) -> anyhow::Result<Update> {
         use Mnemonic::*;
+        use Operand::*;
+        let (Some(dest), Some(source)) = &i.operands else {
+            return Err(anyhow!("invalid operands for move"));
+        };
         match i.mnemonic {
-            Add => todo!(),
-            Mov => {
-                let (Some(dest), Some(source)) = &i.operands else {
-                    return Err(anyhow!("invalid operands for move"));
-                };
-                match (dest, source) {
-                    (Operand::Target(target), Operand::Data(data)) => match target {
-                        Target::Register(register) => self.update_register(*register, data),
-                        Target::Memory(_) => todo!(),
-                    },
-                    (Operand::Target(t1), Operand::Target(t2)) => match (t1, t2) {
-                        (Target::Register(r1), Target::Register(r2)) => {
-                            self.update_register(*r1, &self.get_register(*r2))
-                        }
-                        _ => todo!(),
-                    },
-                    _ => todo!(),
-                }
-            }
-            Sub => todo!(),
-            Cmp => todo!(),
-            Jnz => todo!(),
-            Je => todo!(),
-            Jl => todo!(),
-            Jle => todo!(),
-            Jb => todo!(),
-            Jbe => todo!(),
-            Jp => todo!(),
-            Jo => todo!(),
-            Js => todo!(),
-            Jnl => todo!(),
-            Jg => todo!(),
-            Jnb => todo!(),
-            Ja => todo!(),
-            Jnp => todo!(),
-            Jno => todo!(),
-            Jns => todo!(),
-            Loop => todo!(),
-            Loopz => todo!(),
-            Loopnz => todo!(),
-            Jcxz => todo!(),
+            Mov => match (dest, source) {
+                (Register(r), Data(d)) => self.update_register((*r).into(), d.into(), r.get_type()),
+                (Register(r1), Register(r2)) => self.update_register(
+                    (*r1).into(),
+                    self.get_register((*r2).into(), r2.get_type()),
+                    r1.get_type(),
+                ),
+                (Register(r), SegmentRegister(sr)) => self.update_register(
+                    (*r).into(),
+                    self.get_register((*sr).into(), RegType::Wide),
+                    r.get_type(),
+                ),
+                (SegmentRegister(sr), Register(r)) => self.update_register(
+                    (*sr).into(),
+                    self.get_register((*r).into(), r.get_type()),
+                    RegType::Wide,
+                ),
+                _ => todo!("Haven't implemented: {}", i),
+            },
+            // Sub => match (dest, source) {},
+            _ => todo!("Haven't implemented: {}", i),
         }
     }
 
     pub(crate) fn print_registers(&self) {
         println!();
         println!("Final registers:");
-        for (i, r) in self.registers.iter().enumerate() {
-            println!(
-                "      {}: {:#06x} ({})",
-                unsafe { std::mem::transmute::<u8, Reg>(i as u8) }.as_str(),
-                r,
-                r
-            )
+        for r in all::<Reg>() {
+            let val = self.get_register(r, RegType::Wide);
+            if val > 0 {
+                println!("      {}: {:#06x} ({})", r.as_str(), val, val)
+            }
         }
         println!()
     }
 
     pub(crate) fn update_register(
         &mut self,
-        register: Register,
-        data: &Data,
+        reg: Reg,
+        to_val: u16,
+        reg_type: RegType,
     ) -> anyhow::Result<Update> {
-        let reg = Reg::from(register);
         let from_val = self.registers[reg as usize];
-        let to_val = *match (register, data) {
-            (Register::AX, Data::Word(v)) => v,
-            (Register::CX, Data::Word(v)) => v,
-            (Register::DX, Data::Word(v)) => v,
-            (Register::BX, Data::Word(v)) => v,
-            (Register::SP, Data::Word(v)) => v,
-            (Register::BP, Data::Word(v)) => v,
-            (Register::SI, Data::Word(v)) => v,
-            (Register::DI, Data::Word(v)) => v,
-            _ => todo!(),
+        let to_val = match reg_type {
+            RegType::Low => (from_val & 0b1111111100000000) + to_val,
+            RegType::High => (to_val << 8) + (from_val & 0b0000000011111111),
+            RegType::Wide => to_val,
         };
         self.registers[reg as usize] = to_val;
         Ok(Update {
@@ -166,13 +171,12 @@ impl Computer {
         })
     }
 
-    fn get_register(&self, r: Register) -> Data {
-        let reg = Reg::from(r);
+    fn get_register(&self, reg: Reg, reg_type: RegType) -> u16 {
         let val = self.registers[reg as usize];
-        if r.is_wide() {
-            Data::Word(val)
-        } else {
-            todo!()
+        match reg_type {
+            RegType::Low => val & 0b0000000011111111,
+            RegType::High => (val & 0b1111111100000000) >> 8,
+            RegType::Wide => val,
         }
     }
 }

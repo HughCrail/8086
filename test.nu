@@ -3,6 +3,8 @@ if ("_out" | path exists) { rm --recursive _out }
 mkdir _out
 cargo check
 
+$env.RUST_BACKTRACE = 1;
+
 round_trip "listing_0037_single_register_mov"
 round_trip "listing_0038_many_register_mov"
 round_trip "listing_0039_more_movs"
@@ -11,6 +13,8 @@ round_trip "listing_0041_add_sub_cmp_jnz"
 
 compare_stdout "listing_0043_immediate_movs"
 compare_stdout "listing_0044_register_movs"
+compare_stdout "listing_0045_challenge_register_movs"
+compare_stdout "listing_0046_add_sub_cmp"
 
 def round_trip [case] {
     let listing_dir = "../computer_enhance/perfaware/part1"
@@ -27,6 +31,6 @@ def compare_stdout [case] {
     let listing_dir = "../computer_enhance/perfaware/part1"
     print $"Test\(compare_stdout\): ($case)"
     cargo run --quiet -- $"($listing_dir)/($case)" | save $"_out/($case).actual.txt"
-    difft --exit-code $"./_out/($case).actual.txt" $"($listing_dir)/($case).txt" 
+    difft --exit-code $"($listing_dir)/($case).txt" $"./_out/($case).actual.txt"
     print $"OK: ($case)"
 }

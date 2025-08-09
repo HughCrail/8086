@@ -3,6 +3,7 @@ use crate::{
     data::{Data, Displacement},
     register::Register,
 };
+use anyhow::anyhow;
 use std::fmt::Display;
 
 #[derive(Debug)]
@@ -12,6 +13,52 @@ pub(crate) enum MemoryAddress {
     Reg(Register),
     RegnData(Register, Displacement),
     RegnRegnData(Register, Register, Displacement),
+}
+
+impl Display for MemoryAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MemoryAddress::Direct(data) => write!(f, "[{data}]"),
+            MemoryAddress::RegnReg(reg1, reg2) => write!(f, "[{reg1} + {reg2}]",),
+            MemoryAddress::Reg(reg) => write!(f, "[{reg}]"),
+            MemoryAddress::RegnData(reg, data) => write!(f, "[{reg} {data}]"),
+            MemoryAddress::RegnRegnData(reg1, reg2, data) => {
+                write!(f, "[{reg1} + {reg2} {data}]")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SegmentRegister {
+    ES,
+    CS,
+    SS,
+    DS,
+}
+
+impl Display for SegmentRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use SegmentRegister::*;
+        f.write_str(match self {
+            ES => "es",
+            CS => "cs",
+            SS => "ss",
+            DS => "ds",
+        })
+    }
+}
+
+impl SegmentRegister {
+    pub(crate) fn from(sr: u8) -> anyhow::Result<Self> {
+        Ok(match sr {
+            0b00 => Self::ES,
+            0b01 => Self::CS,
+            0b10 => Self::SS,
+            0b11 => Self::DS,
+            _ => return Err(anyhow!("unknown segment register code: {sr:#05b}")),
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -91,22 +138,5 @@ impl Target {
         };
 
         Ok(Self::Memory(mem_address))
-    }
-}
-
-impl Display for Target {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Target::Register(register) => write!(f, "{register}"),
-            Target::Memory(memory_address) => match memory_address {
-                MemoryAddress::Direct(data) => write!(f, "[{data}]"),
-                MemoryAddress::RegnReg(reg1, reg2) => write!(f, "[{reg1} + {reg2}]",),
-                MemoryAddress::Reg(reg) => write!(f, "[{reg}]"),
-                MemoryAddress::RegnData(reg, data) => write!(f, "[{reg} {data}]"),
-                MemoryAddress::RegnRegnData(reg1, reg2, data) => {
-                    write!(f, "[{reg1} + {reg2} {data}]")
-                }
-            },
-        }
     }
 }
