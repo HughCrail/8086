@@ -1,9 +1,11 @@
 use anyhow::anyhow;
 use bytestream::ByteStream;
 use clap::Parser;
-use instruction::Inst;
+use data::Data;
+use instruction::{Inst, Mnemonic};
 use register::Register;
 use std::{
+    fmt::Display,
     fs::File,
     io::{BufReader, BufWriter, Read, Write},
     path::PathBuf,
@@ -14,6 +16,7 @@ use target::Target;
 mod macros;
 
 mod bytestream;
+mod computer;
 mod data;
 mod instruction;
 mod parsers;
@@ -32,19 +35,18 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let mut byte_stream = ByteStream {
-        bytes: BufReader::new(File::open(cli.infile)?).bytes(),
+        bytes: BufReader::new(File::open(&cli.infile)?).bytes(),
     };
+
+    let infile_name = cli
+        .infile
+        .file_name()
+        .ok_or(anyhow!("invalid in file"))?
+        .display();
 
     if let Some(out_file_path) = cli.outfile {
         let mut out_file = BufWriter::new(File::create(&out_file_path)?);
-        writeln!(
-            out_file,
-            ";{}",
-            out_file_path
-                .file_name()
-                .ok_or(anyhow!("invalid out file"))?
-                .display()
-        )?;
+        writeln!(out_file, ";{infile_name}")?;
         writeln!(out_file)?;
         writeln!(out_file, "bits 16")?;
         writeln!(out_file)?;
@@ -56,9 +58,13 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let mut computer = computer::Computer::new();
+    println!("--- test\\{infile_name} execution ---");
     while let Some(instruction) = Inst::parse(&mut byte_stream)? {
-        println!("{instruction}");
+        let update = computer.execute_instruction(&instruction)?;
+        println!("{instruction} ; {update} ");
     }
+    computer.print_registers();
 
     Ok(())
 }

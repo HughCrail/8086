@@ -9,7 +9,7 @@ use derive_more::Display;
 use std::fmt::Display;
 
 #[derive(Debug)]
-enum Mnemonic {
+pub(crate) enum Mnemonic {
     Add,
     Mov,
     Sub,
@@ -87,8 +87,8 @@ pub(crate) type Operands = (Option<Operand>, Option<Operand>);
 
 #[derive(Debug)]
 pub(crate) struct Inst {
-    mnemonic: Mnemonic,
-    operands: Operands,
+    pub(crate) mnemonic: Mnemonic,
+    pub(crate) operands: Operands,
 }
 
 impl Display for Inst {
