@@ -10,6 +10,7 @@ round_trip "listing_0040_challenge_movs"
 round_trip "listing_0041_add_sub_cmp_jnz"
 
 compare_stdout "listing_0043_immediate_movs"
+compare_stdout "listing_0044_register_movs"
 
 def round_trip [case] {
     let listing_dir = "../computer_enhance/perfaware/part1"
@@ -25,7 +26,7 @@ def round_trip [case] {
 def compare_stdout [case] {
     let listing_dir = "../computer_enhance/perfaware/part1"
     print $"Test\(compare_stdout\): ($case)"
-    cargo run --quiet -- $"($listing_dir)/($case)" e> /dev/null | save $"_out/($case).actual.txt"
+    cargo run --quiet -- $"($listing_dir)/($case)" | save $"_out/($case).actual.txt"
     difft --exit-code $"./_out/($case).actual.txt" $"($listing_dir)/($case).txt" 
     print $"OK: ($case)"
 }

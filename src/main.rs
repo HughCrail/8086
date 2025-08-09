@@ -1,16 +1,13 @@
 use anyhow::anyhow;
 use bytestream::ByteStream;
 use clap::Parser;
-use data::Data;
 use instruction::{Inst, Mnemonic};
 use register::Register;
 use std::{
-    fmt::Display,
     fs::File,
     io::{BufReader, BufWriter, Read, Write},
     path::PathBuf,
 };
-use target::Target;
 
 #[macro_use]
 mod macros;

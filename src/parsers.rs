@@ -1,8 +1,9 @@
 use crate::{
-    ByteStream, Register, Target,
+    ByteStream, Register,
     data::{Data, DataArg, RelativeJump},
     instruction::{Operand, Operands},
     target::MemoryAddress,
+    target::Target,
 };
 
 pub(crate) fn parse_reg_mem_either_way(

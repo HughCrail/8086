@@ -69,4 +69,18 @@ impl Register {
             _ => return Err(anyhow!("unknown 8-bit register code: {reg:#05b}")),
         })
     }
+
+    pub(crate) fn is_wide(&self) -> bool {
+        match self {
+            Register::AX
+            | Register::CX
+            | Register::DX
+            | Register::BX
+            | Register::SP
+            | Register::BP
+            | Register::SI
+            | Register::DI => true,
+            _ => false,
+        }
+    }
 }

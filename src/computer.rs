@@ -1,4 +1,4 @@
-use crate::{Inst, Mnemonic, Target, data::Data, instruction::Operand, register::Register};
+use crate::{Inst, Mnemonic, data::Data, instruction::Operand, register::Register, target::Target};
 use anyhow::anyhow;
 use std::fmt::Display;
 
@@ -92,6 +92,12 @@ impl Computer {
                         Target::Register(register) => self.update_register(*register, data),
                         Target::Memory(_) => todo!(),
                     },
+                    (Operand::Target(t1), Operand::Target(t2)) => match (t1, t2) {
+                        (Target::Register(r1), Target::Register(r2)) => {
+                            self.update_register(*r1, &self.get_register(*r2))
+                        }
+                        _ => todo!(),
+                    },
                     _ => todo!(),
                 }
             }
@@ -158,5 +164,15 @@ impl Computer {
             from_val,
             to_val,
         })
+    }
+
+    fn get_register(&self, r: Register) -> Data {
+        let reg = Reg::from(r);
+        let val = self.registers[reg as usize];
+        if r.is_wide() {
+            Data::Word(val)
+        } else {
+            todo!()
+        }
     }
 }
