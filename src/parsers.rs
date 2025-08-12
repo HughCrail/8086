@@ -2,7 +2,7 @@ use crate::{
     ByteStream, Register,
     data::{Data, DataArg, RelativeJump},
     instruction::Operands,
-    target::{MemoryAddress, SegmentRegister, Target},
+    target::{MemoryAddress, Target},
 };
 
 pub(crate) fn parse_reg_mem_either_way(
@@ -11,7 +11,7 @@ pub(crate) fn parse_reg_mem_either_way(
 ) -> anyhow::Result<Operands> {
     let byte_2 = bytes.next()?;
     let is_wide = (byte_1 & 0b1) == 1;
-    let reg = Target::Register(Register::from((byte_2 >> 3) & 0b111, is_wide)?);
+    let reg = Target::Register(Register::from_reg((byte_2 >> 3) & 0b111, is_wide)?);
     let target = Target::parse(bytes, byte_2, is_wide)?;
 
     let (destination, source) = if (byte_1 & 0b10) != 0 {
@@ -66,7 +66,7 @@ pub(crate) fn parse_ip_inc_8(byte: u8) -> Operands {
 pub(crate) fn parse_mov_imm_to_reg(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Operands> {
     let is_wide = (byte_1 & 0b1000) != 0;
     Ok((
-        Some(Register::from(byte_1 & 0b111, is_wide)?.into()),
+        Some(Register::from_reg(byte_1 & 0b111, is_wide)?.into()),
         Some(Data::parse(bytes, is_wide, false)?.into()),
     ))
 }
@@ -96,7 +96,7 @@ fn parse_mem(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<MemoryAddress
 pub(crate) fn parse_sm_to_rm(bytes: &mut ByteStream) -> anyhow::Result<Operands> {
     let b = bytes.next()?;
     let sr = b >> 3 & 0b11;
-    let sr = SegmentRegister::from(sr)?;
+    let sr = Register::from_sr(sr)?;
     let t = Target::parse(bytes, b, true)?;
     Ok((Some(t.into()), Some(sr.into())))
 }

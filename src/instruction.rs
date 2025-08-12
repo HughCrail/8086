@@ -3,7 +3,7 @@ use crate::{
     bytestream::ByteStream,
     data::{Data, DataArg, RelativeJump},
     parsers,
-    target::{MemoryAddress, SegmentRegister, Target},
+    target::{MemoryAddress, Target},
 };
 use anyhow::anyhow;
 use derive_more::Display;
@@ -82,7 +82,6 @@ enum_with_matching_struct! {
         DataArg,
         Data,
         RelativeJump,
-        SegmentRegister
     }
 }
 
@@ -116,12 +115,6 @@ impl From<Data> for Operand {
 impl From<DataArg> for Operand {
     fn from(d: DataArg) -> Self {
         Self::DataArg(d)
-    }
-}
-
-impl From<SegmentRegister> for Operand {
-    fn from(s: SegmentRegister) -> Self {
-        Self::SegmentRegister(s)
     }
 }
 

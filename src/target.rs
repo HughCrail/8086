@@ -3,7 +3,6 @@ use crate::{
     data::{Data, Displacement},
     register::Register,
 };
-use anyhow::anyhow;
 use std::fmt::Display;
 
 #[derive(Debug)]
@@ -29,38 +28,6 @@ impl Display for MemoryAddress {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum SegmentRegister {
-    ES,
-    CS,
-    SS,
-    DS,
-}
-
-impl Display for SegmentRegister {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use SegmentRegister::*;
-        f.write_str(match self {
-            ES => "es",
-            CS => "cs",
-            SS => "ss",
-            DS => "ds",
-        })
-    }
-}
-
-impl SegmentRegister {
-    pub(crate) fn from(sr: u8) -> anyhow::Result<Self> {
-        Ok(match sr {
-            0b00 => Self::ES,
-            0b01 => Self::CS,
-            0b10 => Self::SS,
-            0b11 => Self::DS,
-            _ => return Err(anyhow!("unknown segment register code: {sr:#05b}")),
-        })
-    }
-}
-
 #[derive(Debug)]
 pub(crate) enum Target {
     Register(Register),
@@ -81,7 +48,7 @@ impl Target {
         let r_m = byte_2 & 0b111;
 
         if mod_val == 0b11 {
-            return Ok(Self::Register(Register::from(r_m, is_wide)?));
+            return Ok(Self::Register(Register::from_reg(r_m, is_wide)?));
         }
 
         if mod_val == 0b00 {
