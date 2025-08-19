@@ -3,7 +3,7 @@ use crate::{
     data::{Data, Displacement},
     register::Register,
 };
-use std::fmt::Display;
+use std::{fmt::Display, io::Read};
 
 #[derive(Debug)]
 pub(crate) enum MemoryAddress {
@@ -35,8 +35,8 @@ pub(crate) enum Target {
 }
 
 impl Target {
-    pub(crate) fn parse(
-        bytes: &mut ByteStream,
+    pub(crate) fn parse<T: Read>(
+        bytes: &mut ByteStream<T>,
         byte_2: u8,
         is_wide: bool,
     ) -> Result<Self, anyhow::Error> {

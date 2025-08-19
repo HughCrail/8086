@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use derive_more::Display;
-use std::fmt::Display;
+use std::{fmt::Display, io::Read};
 
 #[derive(Debug)]
 pub(crate) enum Mnemonic {
@@ -153,7 +153,7 @@ impl Inst {
         }
     }
 
-    pub(crate) fn parse(bytes: &mut ByteStream) -> anyhow::Result<Option<Self>> {
+    pub(crate) fn parse<T: Read>(bytes: &mut ByteStream<T>) -> anyhow::Result<Option<Self>> {
         let Some(byte_1) = bytes.maybe_next()? else {
             return Ok(None);
         };

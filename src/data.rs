@@ -1,5 +1,5 @@
 use crate::bytestream::ByteStream;
-use std::fmt::Display;
+use std::{fmt::Display, io::Read};
 
 #[derive(Debug)]
 pub(crate) enum Data {
@@ -17,8 +17,8 @@ impl From<&Data> for u16 {
 }
 
 impl Data {
-    pub(crate) fn parse(
-        bytes: &mut ByteStream,
+    pub(crate) fn parse<T: Read>(
+        bytes: &mut ByteStream<T>,
         is_wide: bool,
         sign_bit: bool,
     ) -> anyhow::Result<Self> {

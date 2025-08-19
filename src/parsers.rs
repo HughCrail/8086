@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use crate::{
     ByteStream, Register,
     data::{Data, DataArg, RelativeJump},
@@ -5,9 +7,9 @@ use crate::{
     target::{MemoryAddress, Target},
 };
 
-pub(crate) fn parse_reg_mem_either_way(
+pub(crate) fn parse_reg_mem_either_way<T: Read>(
     byte_1: u8,
-    bytes: &mut ByteStream,
+    bytes: &mut ByteStream<T>,
 ) -> anyhow::Result<Operands> {
     let byte_2 = bytes.next()?;
     let is_wide = (byte_1 & 0b1) == 1;
@@ -23,10 +25,10 @@ pub(crate) fn parse_reg_mem_either_way(
     Ok((Some(destination.into()), Some(source.into())))
 }
 
-pub(crate) fn parse_imm_to_reg_mem(
+pub(crate) fn parse_imm_to_reg_mem<T: Read>(
     byte_1: u8,
     byte_2: u8,
-    bytes: &mut ByteStream,
+    bytes: &mut ByteStream<T>,
     check_sign_bit: bool,
 ) -> anyhow::Result<Operands> {
     let is_wide = byte_1 & 0b1 == 1;
@@ -44,7 +46,10 @@ pub(crate) fn parse_imm_to_reg_mem(
     ))
 }
 
-pub(crate) fn parse_imm_to_acc(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Operands> {
+pub(crate) fn parse_imm_to_acc<T: Read>(
+    byte_1: u8,
+    bytes: &mut ByteStream<T>,
+) -> anyhow::Result<Operands> {
     let is_wide = (byte_1 & 0b1) != 0;
     Ok((
         Some(if is_wide { Register::AX } else { Register::AL }.into()),
@@ -63,7 +68,10 @@ pub(crate) fn parse_ip_inc_8(byte: u8) -> Operands {
         None,
     )
 }
-pub(crate) fn parse_mov_imm_to_reg(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Operands> {
+pub(crate) fn parse_mov_imm_to_reg<T: Read>(
+    byte_1: u8,
+    bytes: &mut ByteStream<T>,
+) -> anyhow::Result<Operands> {
     let is_wide = (byte_1 & 0b1000) != 0;
     Ok((
         Some(Register::from_reg(byte_1 & 0b111, is_wide)?.into()),
@@ -71,21 +79,27 @@ pub(crate) fn parse_mov_imm_to_reg(byte_1: u8, bytes: &mut ByteStream) -> anyhow
     ))
 }
 
-pub(crate) fn parse_mov_acc_to_mem(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Operands> {
+pub(crate) fn parse_mov_acc_to_mem<T: Read>(
+    byte_1: u8,
+    bytes: &mut ByteStream<T>,
+) -> anyhow::Result<Operands> {
     Ok((
         Some(parse_mem(byte_1, bytes)?.into()),
         Some(Register::AX.into()),
     ))
 }
 
-pub(crate) fn parse_mov_mem_to_acc(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<Operands> {
+pub(crate) fn parse_mov_mem_to_acc<T: Read>(
+    byte_1: u8,
+    bytes: &mut ByteStream<T>,
+) -> anyhow::Result<Operands> {
     Ok((
         Some(Register::AX.into()),
         Some(parse_mem(byte_1, bytes)?.into()),
     ))
 }
 
-fn parse_mem(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<MemoryAddress> {
+fn parse_mem<T: Read>(byte_1: u8, bytes: &mut ByteStream<T>) -> anyhow::Result<MemoryAddress> {
     Ok(MemoryAddress::Direct(Data::parse(
         bytes,
         (byte_1 & 0b1) == 1,
@@ -93,7 +107,7 @@ fn parse_mem(byte_1: u8, bytes: &mut ByteStream) -> anyhow::Result<MemoryAddress
     )?))
 }
 
-pub(crate) fn parse_sm_to_rm(bytes: &mut ByteStream) -> anyhow::Result<Operands> {
+pub(crate) fn parse_sm_to_rm<T: Read>(bytes: &mut ByteStream<T>) -> anyhow::Result<Operands> {
     let b = bytes.next()?;
     let sr = b >> 3 & 0b11;
     let sr = Register::from_sr(sr)?;
@@ -101,7 +115,7 @@ pub(crate) fn parse_sm_to_rm(bytes: &mut ByteStream) -> anyhow::Result<Operands>
     Ok((Some(t.into()), Some(sr.into())))
 }
 
-pub(crate) fn parse_rm_to_sm(bytes: &mut ByteStream) -> anyhow::Result<Operands> {
+pub(crate) fn parse_rm_to_sm<T: Read>(bytes: &mut ByteStream<T>) -> anyhow::Result<Operands> {
     let (a, b) = parse_sm_to_rm(bytes)?;
     Ok((b, a))
 }

@@ -1,5 +1,5 @@
 use crate::{
-    Inst, Mnemonic,
+    ByteStream, Inst, Mnemonic,
     instruction::Operand,
     register::{RegType, Register},
 };
@@ -7,7 +7,8 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 use enum_iterator::all;
 use std::{
-    fmt::{Display, Write},
+    fmt::{self, Display, Write},
+    io::{Read, Seek},
     mem::take,
 };
 
@@ -35,10 +36,12 @@ impl Display for Flags {
 }
 
 #[derive(Debug)]
-pub(crate) struct Computer {
+pub(crate) struct Computer<T> {
+    program: ByteStream<T>,
     registers: [u16; 12],
     flags: Flags,
     last_update: Update,
+    print_ip: bool,
 }
 
 #[derive(Debug)]
@@ -64,40 +67,58 @@ impl Display for RegUpdate {
 pub(crate) struct Update {
     reg_update: Option<RegUpdate>,
     flag_update: Option<(Flags, Flags)>,
+    ip_update: Option<(u64, u64)>,
 }
 
-impl Display for Update {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Update {
+    pub(crate) fn print(&self, print_ip: bool) -> Result<String, fmt::Error> {
+        let mut parts = vec![];
+
         if let Some(reg) = &self.reg_update {
-            write!(f, "{reg}")?;
+            parts.push(reg.to_string());
         }
 
-        if self.reg_update.is_some() && self.flag_update.is_some() {
-            f.write_char(' ')?;
+        if print_ip && let Some((from, to)) = &self.ip_update {
+            parts.push(format!("ip:{from:#x}->{to:#x}"));
         }
 
         if let Some((from, to)) = &self.flag_update {
-            write!(f, "flags:{from}->{to}")?;
+            parts.push(format!("flags:{from}->{to}"));
         }
 
-        Ok(())
+        Ok(parts.join(" "))
     }
 }
 
-impl Computer {
-    pub(crate) fn new() -> Self {
+#[derive(Debug)]
+pub(crate) enum ExeResult {
+    Halt,
+    Success(Inst, Update),
+}
+
+impl<T: Read + Seek> Computer<T> {
+    pub(crate) fn new(program: ByteStream<T>, print_ip: bool) -> Self {
         Self {
+            program,
             registers: [0; 12],
             flags: Flags::empty(),
             last_update: Update::default(),
+            print_ip,
         }
     }
 
-    pub(crate) fn execute_instruction(&mut self, i: &Inst) -> anyhow::Result<Update> {
+    pub(crate) fn execute_instruction(&mut self) -> anyhow::Result<ExeResult> {
         use Mnemonic::*;
         use Operand::*;
 
-        let Inst { mnemonic, operands } = i;
+        let ip_before = self.program.get_iptr()?;
+        let Some(i) = Inst::parse(&mut self.program)? else {
+            self.print_registers(ip_before);
+            return Ok(ExeResult::Halt);
+        };
+        let ip_after = self.program.get_iptr()?;
+        self.update_ip(ip_before, ip_after);
+        let Inst { mnemonic, operands } = &i;
 
         let (Some(dest), Some(source)) = &operands else {
             todo!("Haven't implemented: {i} => {:?}", i)
@@ -134,7 +155,7 @@ impl Computer {
             }
             _ => todo!("Haven't implemented: {i} => {:?}", i),
         };
-        Ok(take(&mut self.last_update))
+        Ok(ExeResult::Success(i, take(&mut self.last_update)))
     }
 
     fn do_op(&mut self, a: &Register, b: u16, op: fn(u16, u16) -> u16) -> u16 {
@@ -144,7 +165,7 @@ impl Computer {
         res
     }
 
-    pub(crate) fn print_registers(&self) {
+    pub(crate) fn print_registers(&self, ip: u64) {
         println!();
         println!("Final registers:");
         for r in all::<Register>().filter(|r| matches!(r.get_type(), RegType::Wide)) {
@@ -152,6 +173,9 @@ impl Computer {
             if val > 0 {
                 println!("      {}: {val:#06x} ({val})", r.as_str());
             }
+        }
+        if self.print_ip {
+            println!("      ip: {ip:#06x} ({ip})");
         }
         if !self.flags.is_empty() {
             println!("   flags: {}", self.flags);
@@ -195,5 +219,9 @@ impl Computer {
             RegType::High => (val & 0b1111111100000000) >> 8,
             RegType::Wide => val,
         }
+    }
+
+    fn update_ip(&mut self, ip_before: u64, ip_after: u64) {
+        self.last_update.ip_update = Some((ip_before, ip_after));
     }
 }

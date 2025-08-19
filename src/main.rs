@@ -1,11 +1,12 @@
 use anyhow::anyhow;
 use bytestream::ByteStream;
 use clap::Parser;
+use computer::ExeResult;
 use instruction::{Inst, Mnemonic};
 use register::Register;
 use std::{
     fs::File,
-    io::{BufReader, BufWriter, Read, Write},
+    io::{BufReader, BufWriter, Write},
     path::PathBuf,
 };
 
@@ -26,13 +27,15 @@ struct Cli {
     infile: PathBuf,
     #[arg(short, long, value_name = "ASMFILE")]
     outfile: Option<PathBuf>,
+    #[arg(short, long)]
+    print_ip: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let mut byte_stream = ByteStream {
-        bytes: BufReader::new(File::open(&cli.infile)?).bytes(),
+        reader: BufReader::new(File::open(&cli.infile)?),
     };
 
     let infile_name = cli
@@ -55,13 +58,11 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mut computer = computer::Computer::new();
+    let mut computer = computer::Computer::new(byte_stream, cli.print_ip);
     println!("--- test\\{infile_name} execution ---");
-    while let Some(instruction) = Inst::parse(&mut byte_stream)? {
-        let update = computer.execute_instruction(&instruction)?;
-        println!("{instruction} ; {update} ");
+    while let ExeResult::Success(instruction, update) = computer.execute_instruction()? {
+        println!("{instruction} ; {} ", update.print(cli.print_ip)?);
     }
-    computer.print_registers();
 
     Ok(())
 }

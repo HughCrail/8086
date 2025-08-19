@@ -11,10 +11,14 @@ round_trip "listing_0039_more_movs"
 round_trip "listing_0040_challenge_movs"
 round_trip "listing_0041_add_sub_cmp_jnz"
 
-compare_stdout "listing_0043_immediate_movs"
-compare_stdout "listing_0044_register_movs"
-compare_stdout "listing_0045_challenge_register_movs"
-compare_stdout "listing_0046_add_sub_cmp"
+compare_stdout "listing_0043_immediate_movs" false
+compare_stdout "listing_0044_register_movs" false
+compare_stdout "listing_0045_challenge_register_movs" false
+compare_stdout "listing_0046_add_sub_cmp" false
+# compare_stdout "listing_0047_challenge_flags" false
+
+compare_stdout "listing_0048_ip_register" true
+
 
 def round_trip [case] {
     let listing_dir = "../computer_enhance/perfaware/part1"
@@ -27,10 +31,14 @@ def round_trip [case] {
     print $"OK: ($case)"
 }
 
-def compare_stdout [case] {
+def compare_stdout [case, print_ip?] {
     let listing_dir = "../computer_enhance/perfaware/part1"
     print $"Test\(compare_stdout\): ($case)"
-    cargo run --quiet -- $"($listing_dir)/($case)" | save $"_out/($case).actual.txt"
+    mut args = ["--quiet", "--", $"($listing_dir)/($case)"]
+    if $print_ip {
+        $args = $args | append "--print-ip"
+    }
+    cargo run ...$args | save $"_out/($case).actual.txt"
     difft --exit-code $"($listing_dir)/($case).txt" $"./_out/($case).actual.txt"
     print $"OK: ($case)"
 }
