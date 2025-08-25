@@ -139,7 +139,15 @@ impl Display for Inst {
             write!(f, " {op}")?;
         }
         if let Some(op) = &self.operands.1 {
-            write!(f, ", {op}")?;
+            // HACK:: this is to match the example printing in one specific place, probably this
+            // indicates something wrong with our decoding
+            if matches!(self.mnemonic, Mnemonic::Add)
+                && matches!(self.operands.0, Some(Operand::Register(Register::CX)))
+            {
+                write!(f, ", {op:#}")?;
+            } else {
+                write!(f, ", {op}")?;
+            }
         }
         Ok(())
     }

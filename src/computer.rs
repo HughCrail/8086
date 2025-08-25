@@ -15,9 +15,12 @@ use std::{
 bitflags! {
     #[derive(Debug, Clone, Copy)]
     struct Flags: u16 {
-        const Sign = 0b000001;
+        const Carry = 0b000001;
         const Parity = 0b000010;
-        const Zero = 0b000100;
+        const AuxCarry = 0b000100;
+        const Sign = 0b001000;
+        const Zero = 0b010000;
+        const Overflow = 0b100000;
     }
 }
 
@@ -25,9 +28,12 @@ impl Display for Flags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for flag in self.iter() {
             f.write_char(match flag {
-                f if f.contains(Flags::Sign) => 'S',
+                f if f.contains(Flags::Carry) => 'C',
+                f if f.contains(Flags::AuxCarry) => 'A',
                 f if f.contains(Flags::Parity) => 'P',
+                f if f.contains(Flags::Sign) => 'S',
                 f if f.contains(Flags::Zero) => 'Z',
+                f if f.contains(Flags::Overflow) => 'O',
                 _ => unreachable!(),
             })?;
         }
@@ -130,9 +136,24 @@ impl<T: Read + Seek> Computer<T> {
                 _ => todo!("Haven't implemented: {i} => {:?}", i),
             },
             Sub | Cmp | Add => {
-                let op: fn(u16, u16) -> u16 = match mnemonic {
-                    Add => |a, b| a.wrapping_add(b),
-                    Sub | Cmp => |a, b| a.wrapping_sub(b),
+                let op: fn(u16, u16) -> (u16, Flags) = match mnemonic {
+                    Add => |a, b| {
+                        let mut flags = Flags::empty();
+                        flags.set(Flags::Carry, a.checked_add(b).is_none());
+                        flags.set(Flags::AuxCarry, (((a & 0xF) + (b & 0xF)) & 0xFFF0) != 0);
+                        flags.set(Flags::Overflow, (a as i16).checked_add(b as i16).is_none());
+                        (a.wrapping_add(b), flags)
+                    },
+                    Sub | Cmp => |a, b| {
+                        let mut flags = Flags::empty();
+                        flags.set(Flags::Carry, a.checked_sub(b).is_none());
+                        flags.set(
+                            Flags::AuxCarry,
+                            ((((a & 0xF) | 0x10) - (b & 0xF)) & 0xFFF0) == 0,
+                        );
+                        flags.set(Flags::Overflow, (a as i16).checked_sub(b as i16).is_none());
+                        (a.wrapping_sub(b), flags)
+                    },
                     _ => unreachable!(),
                 };
                 let Register(r) = dest else {
@@ -158,10 +179,10 @@ impl<T: Read + Seek> Computer<T> {
         Ok(ExeResult::Success(i, take(&mut self.last_update)))
     }
 
-    fn do_op(&mut self, a: &Register, b: u16, op: fn(u16, u16) -> u16) -> u16 {
+    fn do_op(&mut self, a: &Register, b: u16, op: fn(u16, u16) -> (u16, Flags)) -> u16 {
         let a = self.get_register(*a);
-        let res = op(a, b);
-        self.update_flags(res);
+        let (res, flags) = op(a, b);
+        self.update_flags(res, flags);
         res
     }
 
@@ -198,8 +219,9 @@ impl<T: Read + Seek> Computer<T> {
         })
     }
 
-    fn update_flags(&mut self, result: u16) {
+    fn update_flags(&mut self, result: u16, op_flags: Flags) {
         let flags_before = self.flags;
+        self.flags = op_flags;
         self.flags.set(Flags::Sign, (result as i16) < 0);
         self.flags.set(Flags::Zero, result == 0);
         self.flags.set(

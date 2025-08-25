@@ -37,7 +37,13 @@ impl Display for Data {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Data::Byte(x) => write!(f, "{x}"),
-            Data::Word(x) => write!(f, "{x}"),
+            Data::Word(x) => {
+                if f.alternate() {
+                    write!(f, "{}", *x as i16)
+                } else {
+                    write!(f, "{x}")
+                }
+            }
         }
     }
 }
@@ -66,6 +72,8 @@ impl Display for DataArg {
                 },
                 self.data
             )
+        } else if f.alternate() {
+            write!(f, "{:#}", self.data)
         } else {
             write!(f, "{}", self.data)
         }

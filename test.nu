@@ -15,7 +15,7 @@ compare_stdout "listing_0043_immediate_movs" false
 compare_stdout "listing_0044_register_movs" false
 compare_stdout "listing_0045_challenge_register_movs" false
 compare_stdout "listing_0046_add_sub_cmp" false
-# compare_stdout "listing_0047_challenge_flags" false
+compare_stdout "listing_0047_challenge_flags" false
 
 compare_stdout "listing_0048_ip_register" true
 
