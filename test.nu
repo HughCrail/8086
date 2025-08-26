@@ -18,7 +18,7 @@ compare_stdout "listing_0046_add_sub_cmp" false
 compare_stdout "listing_0047_challenge_flags" false
 
 compare_stdout "listing_0048_ip_register" true
-
+compare_stdout "listing_0049_conditional_jumps" true
 
 def round_trip [case] {
     let listing_dir = "../computer_enhance/perfaware/part1"

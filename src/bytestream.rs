@@ -25,7 +25,7 @@ impl<T: Seek> ByteStream<T> {
     pub(crate) fn get_iptr(&mut self) -> Result<u64> {
         self.reader.stream_position()
     }
-    // pub(crate) fn set_iptr(&mut self) -> Result<u64, Error> {
-    //     self.reader.seek_relative()
-    // }
+    pub(crate) fn set_iptr(&mut self, offset: i64) -> Result<()> {
+        self.reader.seek_relative(offset)
+    }
 }

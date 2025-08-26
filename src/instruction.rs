@@ -50,7 +50,7 @@ impl Mnemonic {
             Mnemonic::Mov => "mov",
             Mnemonic::Sub => "sub",
             Mnemonic::Cmp => "cmp",
-            Mnemonic::Jnz => "jnz",
+            Mnemonic::Jnz => "jne",
             Mnemonic::Je => "je",
             Mnemonic::Jl => "jl",
             Mnemonic::Jle => "jle",

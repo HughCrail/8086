@@ -1,5 +1,5 @@
 use crate::{
-    ByteStream, Inst, Mnemonic,
+    ByteStream, Inst, Mnemonic, data,
     instruction::Operand,
     register::{RegType, Register},
 };
@@ -126,13 +126,15 @@ impl<T: Read + Seek> Computer<T> {
         self.update_ip(ip_before, ip_after);
         let Inst { mnemonic, operands } = &i;
 
-        let (Some(dest), Some(source)) = &operands else {
+        let (Some(dest), source) = &operands else {
             todo!("Haven't implemented: {i} => {:?}", i)
         };
         match mnemonic {
             Mov => match (dest, source) {
-                (Register(r), Data(d)) => self.update_register(*r, d.into()),
-                (Register(r1), Register(r2)) => self.update_register(*r1, self.get_register(*r2)),
+                (Register(r), Some(Data(d))) => self.update_register(*r, d.into()),
+                (Register(r1), Some(Register(r2))) => {
+                    self.update_register(*r1, self.get_register(*r2))
+                }
                 _ => todo!("Haven't implemented: {i} => {:?}", i),
             },
             Sub | Cmp | Add => {
@@ -162,9 +164,9 @@ impl<T: Read + Seek> Computer<T> {
                 let res = self.do_op(
                     r,
                     match source {
-                        Register(r) => self.get_register(*r),
-                        DataArg(d) => (&d.data).into(),
-                        Data(d) => d.into(),
+                        Some(Register(r)) => self.get_register(*r),
+                        Some(DataArg(d)) => (&d.data).into(),
+                        Some(Data(d)) => d.into(),
                         _ => Err(anyhow!("invalid source operand for {i}"))?,
                     },
                     op,
@@ -172,6 +174,17 @@ impl<T: Read + Seek> Computer<T> {
 
                 if !matches!(mnemonic, Cmp) {
                     self.update_register(*r, res);
+                }
+            }
+            Jnz => {
+                if !self.flags.contains(Flags::Zero) {
+                    let Some(RelativeJump(data::RelativeJump { offset })) = operands.0 else {
+                        return Err(anyhow!("invalid operand for {i}"));
+                    };
+                    self.program
+                        .set_iptr(offset as i64 - (ip_after - ip_before) as i64)?;
+                    let ip_after = self.program.get_iptr()?;
+                    self.update_ip(ip_before, ip_after);
                 }
             }
             _ => todo!("Haven't implemented: {i} => {:?}", i),
